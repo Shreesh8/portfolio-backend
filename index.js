@@ -1,7 +1,7 @@
 require("dotenv").config();
 const express = require("express");
 const cors = require("cors");
-const nodemailer = require("nodemailer");
+const { Resend } = require("resend");
 
 const app = express();
 
@@ -15,26 +15,16 @@ app.get("/", (req, res) => {
 });
 
 /* ================= Env Vars ================= */
-const { SMTP_USER, SMTP_PASS, EMAIL_TO } = process.env;
+const { RESEND_API_KEY, EMAIL_TO } = process.env;
 
-if (!SMTP_USER || !SMTP_PASS || !EMAIL_TO) {
-  console.warn("⚠️ Missing SMTP_USER / SMTP_PASS / EMAIL_TO env vars");
+if (!RESEND_API_KEY || !EMAIL_TO) {
+  console.warn(
+    "⚠️ Missing RESEND_API_KEY or EMAIL_TO in environment variables"
+  );
 }
 
-/* ================= Mail Transport (RENDER FIX) ================= */
-const transporter = nodemailer.createTransport({
-  service: "gmail",
-  auth: {
-    user: SMTP_USER,
-    pass: SMTP_PASS, // Gmail App Password
-  },
-  tls: {
-    rejectUnauthorized: false,
-  },
-  connectionTimeout: 10000,
-  greetingTimeout: 10000,
-  socketTimeout: 10000,
-});
+/* ================= Resend Client ================= */
+const resend = new Resend(RESEND_API_KEY);
 
 /* ================= Contact Route ================= */
 app.post("/send", async (req, res) => {
@@ -48,22 +38,23 @@ app.post("/send", async (req, res) => {
   }
 
   try {
-    await transporter.sendMail({
-      from: `"Portfolio Contact" <${SMTP_USER}>`,
+    await resend.emails.send({
+      from: "onboarding@resend.dev",
       to: EMAIL_TO,
-      replyTo: email,
+      reply_to: email,
       subject: `New Contact Message from ${name || email}`,
-      text: `From: ${name || "Anonymous"} <${email}>\n\n${message}`,
       html: `
-        <p><strong>From:</strong> ${name || "Anonymous"} &lt;${email}&gt;</p>
-        <hr/>
+        <h3>New Portfolio Message</h3>
+        <p><strong>Name:</strong> ${name || "Anonymous"}</p>
+        <p><strong>Email:</strong> ${email}</p>
+        <hr />
         <p>${message.replace(/\n/g, "<br/>")}</p>
       `,
     });
 
     return res.json({ ok: true });
-  } catch (err) {
-    console.error("❌ sendMail error:", err);
+  } catch (error) {
+    console.error("Resend error:", error);
     return res.status(500).json({
       ok: false,
       error: "Failed to send email",
@@ -74,5 +65,5 @@ app.post("/send", async (req, res) => {
 /* ================= Server ================= */
 const PORT = process.env.PORT || 10000;
 app.listen(PORT, () => {
-  console.log(`✅ Contact backend running on port ${PORT}`);
+  console.log(`✅ Server running on port ${PORT}`);
 });
